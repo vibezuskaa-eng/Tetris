@@ -31,13 +31,12 @@ FORMAS = {
 CORES = {
     "I": (0, 240, 240),   # ciano
     "O": (240, 240, 0),   # amarelo
-    "T": (160, 0, 240),   # roxo
+    "T": (180, 0, 240),   # roxo
     "S": (0, 240, 0),     # verde
     "Z": (240, 0, 0),     # vermelho
-    "J": (0, 0, 240),     # azul
+    "J": (40, 110, 255),  # azul (mais claro para aparecer no fundo preto)
     "L": (240, 160, 0),   # laranja
 }
-
 
 class Peca:
     def __init__(self, nome):
@@ -75,9 +74,10 @@ def sorteador():
 
 def posicao_valida(grade, celulas):
     for c, l in celulas:
-        if c < 0 or c >= COLUNAS or l >= LINHAS:
+        # l < 0 também é inválido: a peça nunca pode ficar acima do tabuleiro
+        if c < 0 or c >= COLUNAS or l < 0 or l >= LINHAS:
             return False
-        if l >= 0 and grade[l][c] is not None:
+        if grade[l][c] is not None:
             return False
     return True
 
@@ -92,18 +92,20 @@ def mover(grade, peca, dx, dy):
 
 def girar(grade, peca):
     nova = peca.forma_girada()
-    # tenta girar; se bater na parede, tenta empurrar para o lado
-    for deslocamento in (0, -1, 1, -2, 2):
-        if posicao_valida(grade, peca.celulas(forma=nova, x=peca.x + deslocamento)):
-            peca.forma = nova
-            peca.x += deslocamento
-            return
+    # tenta girar; se bater na parede/chão/outras peças, tenta deslocar a peça
+    for dy in (0, -1, -2, -3):
+        for dx in (0, -1, 1, -2, 2):
+            celulas = peca.celulas(forma=nova, x=peca.x + dx, y=peca.y + dy)
+            if posicao_valida(grade, celulas):
+                peca.forma = nova
+                peca.x += dx
+                peca.y += dy
+                return
 
 
 def fixar(grade, peca):
     for c, l in peca.celulas():
-        if l >= 0:
-            grade[l][c] = peca.cor
+        grade[l][c] = peca.cor
 
 
 def limpar_linhas(grade):
@@ -151,7 +153,9 @@ def main():
     grade = [[None] * COLUNAS for _ in range(LINHAS)]
     pecas = sorteador()
     atual = next(pecas)
+    proxima = next(pecas)
     pontos = 0
+    pygame.display.set_caption(f"Tetris - atual: {atual.nome} | próxima: {proxima.nome}")
     rodando = True
 
     while rodando:
@@ -163,7 +167,8 @@ def main():
                 if not mover(grade, atual, 0, 1):
                     fixar(grade, atual)
                     pontos += limpar_linhas(grade) * 100
-                    atual = next(pecas)
+                    atual, proxima = proxima, next(pecas)
+                    pygame.display.set_caption(f"Tetris - atual: {atual.nome} | próxima: {proxima.nome}")
                     if not posicao_valida(grade, atual.celulas()):
                         print(f"Game over! Pontos: {pontos}")
                         rodando = False
@@ -171,18 +176,16 @@ def main():
             elif evento.type == pygame.KEYDOWN:
                 match evento.key:
                     case pygame.K_d | pygame.K_RIGHT:
-                        mover(grade, atual, 1, 0)
+                        mover(grade, atual, 1, 0)      # right
                     case pygame.K_a | pygame.K_LEFT:
-                        mover(grade, atual, -1, 0)
+                        mover(grade, atual, -1, 0)     # left
                     case pygame.K_s | pygame.K_DOWN:
-                        mover(grade, atual, 0, 1)
+                        mover(grade, atual, 0, 1)      # down one row
                     case pygame.K_w | pygame.K_UP:
-                        girar(grade, atual)
+                        girar(grade, atual)            # rotate
                     case pygame.K_SPACE:
-                        # queda instantânea
-                        while mover(grade, atual, 0, 1):
+                        while mover(grade, atual, 0, 1):   # instant drop (space bar)
                             pass
-
         desenhar(janela, grade, atual)
         clock.tick(60)
 
